@@ -2,6 +2,7 @@
 # PROPRIETARY - NEVER PUSH
 # =========================
 docs/
+research/
 
 # Python
 __pycache__/

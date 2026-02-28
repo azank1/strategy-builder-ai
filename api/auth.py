@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -18,28 +19,61 @@ from api.config import get_settings
 from api.database import get_db
 from api.db_models import SubscriptionTier, User
 
+logger = logging.getLogger(__name__)
+
 _settings = get_settings()
 _bearer = HTTPBearer()
 
-# In-memory nonce store — use Redis in production
-_active_nonces: dict[str, datetime] = {}
+# ─── Nonce store ─────────────────────────────────────────────────────────────
+# Uses Redis when REDIS_URL is configured; falls back to in-memory for dev.
+
+_redis_client = None
+_fallback_nonces: dict[str, datetime] = {}
+_NONCE_TTL = 600  # 10 minutes
+
+
+def _get_redis():
+    """Lazily initialise a Redis client if configured."""
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    if _settings.redis_url:
+        try:
+            import redis
+            _redis_client = redis.from_url(
+                _settings.redis_url, decode_responses=True
+            )
+            _redis_client.ping()
+            logger.info("Nonce store: Redis")
+            return _redis_client
+        except Exception as exc:
+            logger.warning("Redis unavailable (%s) — falling back to in-memory nonces", exc)
+            _redis_client = False  # sentinel: don't retry
+    return None
 
 
 def generate_nonce() -> str:
     """Generate a cryptographic nonce for SIWE."""
     nonce = secrets.token_hex(16)
-    _active_nonces[nonce] = datetime.now(timezone.utc) + timedelta(minutes=10)
-    # Prune expired nonces
-    now = datetime.now(timezone.utc)
-    expired = [k for k, v in _active_nonces.items() if v < now]
-    for k in expired:
-        _active_nonces.pop(k, None)
+    r = _get_redis()
+    if r:
+        r.setex(f"siwe:nonce:{nonce}", _NONCE_TTL, "1")
+    else:
+        _fallback_nonces[nonce] = datetime.now(timezone.utc) + timedelta(seconds=_NONCE_TTL)
+        # Prune expired nonces
+        now = datetime.now(timezone.utc)
+        expired = [k for k, v in _fallback_nonces.items() if v < now]
+        for k in expired:
+            _fallback_nonces.pop(k, None)
     return nonce
 
 
 def verify_nonce(nonce: str) -> bool:
-    """Verify and consume a nonce."""
-    expiry = _active_nonces.pop(nonce, None)
+    """Verify and consume a nonce (single-use)."""
+    r = _get_redis()
+    if r:
+        return bool(r.delete(f"siwe:nonce:{nonce}"))
+    expiry = _fallback_nonces.pop(nonce, None)
     if expiry is None:
         return False
     return expiry > datetime.now(timezone.utc)
@@ -141,3 +175,14 @@ def require_tier(minimum: SubscriptionTier):
         return user
 
     return _check
+
+
+async def require_admin(user: User = Depends(get_current_user)) -> User:
+    """Dependency — allow only wallets in the admin allowlist."""
+    admin_wallets = [w.lower() for w in _settings.admin_wallets]
+    if user.wallet_address.lower() not in admin_wallets:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user

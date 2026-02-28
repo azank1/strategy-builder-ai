@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import get_settings
-from api.routes import auth, signals, systems, users
+from api.routes import admin, auth, signals, systems, users
 
 import strategy_engine
 
@@ -51,6 +51,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(systems.router, prefix="/api/v1")
 app.include_router(signals.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health")

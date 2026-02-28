@@ -37,8 +37,10 @@ class SubscriptionTier(str, PyEnum):
 
 
 class SystemType(str, PyEnum):
-    SDCA = "sdca"
-    LTPI = "ltpi"
+    VALUATION = "valuation"
+    TREND = "trend"
+    MOMENTUM = "momentum"
+    ROTATION = "rotation"
 
 
 # ─── Users & Auth ─────────────────────────────────────────────────────────────
@@ -152,8 +154,8 @@ class SignalSnapshot(Base):
     asset: Mapped[str] = mapped_column(String(10), nullable=False)
 
     # Signal results
-    sdca_composite_z: Mapped[float | None] = mapped_column(Float, nullable=True)
-    ltpi_trend_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    valuation_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    trend_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     signal_strength: Mapped[str | None] = mapped_column(String(30), nullable=True)
     allocation_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)

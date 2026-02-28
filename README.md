@@ -1,6 +1,14 @@
-# strategy-builder-ai
+# Strategy Builder AI
 
-Quantitative allocation signal platform for multi-asset portfolios.
+Build, run, and manage quantitative allocation strategies across crypto,
+commodities, and equities — all from a single dashboard.
+
+## What It Does
+
+- **Build custom strategies** — compose multi-indicator signal systems for any supported asset
+- **Real-time scoring** — outlier-robust computation engine with automatic decay detection
+- **Portfolio signals** — 7-level allocation recommendations from Strongest Buy to Strongest Sell
+- **On-chain subscriptions** — pay with USDC on Base L2, no credit cards
 
 ## Quick Start
 
@@ -17,16 +25,6 @@ uvicorn api.main:app --reload
 # Start the frontend
 cd web && npm run dev
 ```
-
-## Subscription Tiers
-
-| Tier | Price | Assets | Features |
-|------|-------|--------|----------|
-| Explorer | Free | BTC | Basic signals |
-| Strategist | 29 USDC/mo | BTC, ETH, Gold, SPX | Full portfolio signals |
-| Quant | 99 USDC/mo | All + alts | ML insights, regime detection |
-
-Payments via USDC on **Base L2**.
 
 ## Tech Stack
 

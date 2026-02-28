@@ -24,6 +24,82 @@ from strategy_engine.models import (
 router = APIRouter(prefix="/signals", tags=["signals"])
 
 
+# ─── Dashboard summary ────────────────────────────────────────────────────────
+
+
+@router.get("/dashboard", response_model=list[SignalResponse])
+async def dashboard_signals(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[SignalResponse]:
+    """Return the latest signal for every active system (avoids N+1)."""
+    # Get all active system IDs
+    sys_result = await db.execute(
+        select(IndicatorSystem.id).where(
+            IndicatorSystem.user_id == user.id,
+            IndicatorSystem.is_active == True,  # noqa: E712
+        )
+    )
+    system_ids = [row[0] for row in sys_result.all()]
+    if not system_ids:
+        return []
+
+    # For each system, fetch the latest snapshot
+    signals: list[SignalResponse] = []
+    for sid in system_ids:
+        result = await db.execute(
+            select(SignalSnapshot)
+            .where(
+                SignalSnapshot.system_id == sid,
+                SignalSnapshot.user_id == user.id,
+            )
+            .order_by(SignalSnapshot.computed_at.desc())
+            .limit(1)
+        )
+        snap = result.scalar_one_or_none()
+        if snap is not None:
+            signals.append(SignalResponse.model_validate(snap))
+
+    return signals
+
+
+# ─── Internal mapping: public system types → engine types ─────────────────────
+
+_ENGINE_MAP = {
+    SystemType.VALUATION: ("sdca", SDCASystem, "score_sdca"),
+    SystemType.TREND: ("trend", LTPISystem, "score_ltpi"),
+    # SystemType.MOMENTUM: ("momentum", ..., "score_mtpi"),  # future
+    # SystemType.ROTATION: ("rotation", ..., "score_rotation"),  # future
+}
+
+
+def _compute_for_system(
+    scorer: CompositeScorer, system: IndicatorSystem
+) -> tuple[dict, dict]:
+    """Run engine computation; returns (snapshot_kwargs, signal_data)."""
+    mapping = _ENGINE_MAP.get(system.system_type)
+    if mapping is None:
+        return {"asset": system.asset}, {}
+
+    _key, model_cls, scorer_method = mapping
+    engine_obj = model_cls(**system.system_data)
+    result = getattr(scorer, scorer_method)(engine_obj)
+
+    snapshot_kwargs: dict = {"asset": system.asset}
+    signal_data: dict = {}
+
+    if system.system_type == SystemType.VALUATION:
+        snapshot_kwargs["valuation_score"] = result.composite_z
+        snapshot_kwargs["reasoning"] = result.interpretation
+        signal_data = {"valuation": {"score": result.composite_z, "interpretation": result.interpretation}}
+    elif system.system_type == SystemType.TREND:
+        snapshot_kwargs["trend_score"] = result.trend_ratio
+        snapshot_kwargs["reasoning"] = result.interpretation
+        signal_data = {"trend": {"score": result.trend_ratio, "interpretation": result.interpretation}}
+
+    return snapshot_kwargs, signal_data
+
+
 @router.post("/{system_id}/compute", response_model=SignalResponse)
 async def compute_signal(
     system_id: uuid.UUID,
@@ -32,24 +108,8 @@ async def compute_signal(
 ) -> SignalResponse:
     """Re-compute the signal for a given system and store a snapshot."""
     system = await _get_system(db, user.id, system_id)
-
     scorer = CompositeScorer()
-    signal_data: dict = {}
-    snapshot_kwargs: dict = {"asset": system.asset}
-
-    if system.system_type == SystemType.SDCA:
-        sdca = SDCASystem(**system.system_data)
-        result = scorer.score_sdca(sdca)
-        snapshot_kwargs["sdca_composite_z"] = result.composite_z
-        snapshot_kwargs["reasoning"] = result.interpretation
-        signal_data = {"sdca": {"composite_z": result.composite_z, "interpretation": result.interpretation}}
-
-    elif system.system_type == SystemType.LTPI:
-        ltpi = LTPISystem(**system.system_data)
-        result = scorer.score_ltpi(ltpi)
-        snapshot_kwargs["ltpi_trend_ratio"] = result.trend_ratio
-        snapshot_kwargs["reasoning"] = result.interpretation
-        signal_data = {"ltpi": {"trend_ratio": result.trend_ratio, "interpretation": result.interpretation}}
+    snapshot_kwargs, signal_data = _compute_for_system(scorer, system)
 
     snapshot = SignalSnapshot(
         user_id=user.id,
@@ -134,23 +194,8 @@ async def compute_portfolio(
     scorer = CompositeScorer()
     signals: list[SignalResponse] = []
 
-    # Group systems by asset for combined scoring
     for system in systems:
-        signal_data: dict = {}
-        snapshot_kwargs: dict = {"asset": system.asset}
-
-        if system.system_type == SystemType.SDCA:
-            sdca = SDCASystem(**system.system_data)
-            r = scorer.score_sdca(sdca)
-            snapshot_kwargs["sdca_composite_z"] = r.composite_z
-            snapshot_kwargs["reasoning"] = r.interpretation
-            signal_data = {"sdca": {"composite_z": r.composite_z}}
-        elif system.system_type == SystemType.LTPI:
-            ltpi = LTPISystem(**system.system_data)
-            r = scorer.score_ltpi(ltpi)
-            snapshot_kwargs["ltpi_trend_ratio"] = r.trend_ratio
-            snapshot_kwargs["reasoning"] = r.interpretation
-            signal_data = {"ltpi": {"trend_ratio": r.trend_ratio}}
+        snapshot_kwargs, signal_data = _compute_for_system(scorer, system)
 
         snapshot = SignalSnapshot(
             user_id=user.id,

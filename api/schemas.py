@@ -85,8 +85,8 @@ class SystemResponse(BaseModel):
 class SignalResponse(BaseModel):
     id: uuid.UUID
     asset: str
-    sdca_composite_z: Optional[float]
-    ltpi_trend_ratio: Optional[float]
+    valuation_score: Optional[float]
+    trend_score: Optional[float]
     signal_strength: Optional[str]
     allocation_pct: Optional[float]
     reasoning: Optional[str]

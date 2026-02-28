@@ -64,7 +64,7 @@ export async function getProfile(token: string): Promise<UserProfile> {
 
 export interface SystemData {
   id: string;
-  system_type: "sdca" | "ltpi";
+  system_type: "valuation" | "trend" | "momentum" | "rotation";
   asset: string;
   name: string;
   description: string | null;
@@ -107,8 +107,8 @@ export async function deleteSystem(
 export interface Signal {
   id: string;
   asset: string;
-  sdca_composite_z: number | null;
-  ltpi_trend_ratio: number | null;
+  valuation_score: number | null;
+  trend_score: number | null;
   signal_strength: string | null;
   allocation_pct: number | null;
   reasoning: string | null;
@@ -145,4 +145,99 @@ export async function healthCheck(): Promise<{
   environment: string;
 }> {
   return apiFetch("/health");
+}
+
+// ─── Additional system operations ────────────────────────────────────────────
+
+export async function updateSystem(
+  token: string,
+  systemId: string,
+  data: {
+    name?: string;
+    description?: string;
+    system_data?: Record<string, unknown>;
+    is_active?: boolean;
+  }
+): Promise<SystemData> {
+  return apiFetch(`/systems/${systemId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+    token,
+  });
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export async function getDashboardSignals(token: string): Promise<Signal[]> {
+  return apiFetch("/signals/dashboard", { token });
+}
+
+export interface PortfolioResponse {
+  signals: Signal[];
+  total_allocation: number;
+  computed_at: string;
+}
+
+export async function computePortfolio(
+  token: string
+): Promise<PortfolioResponse> {
+  return apiFetch("/signals/portfolio", { method: "POST", token });
+}
+
+// ─── Admin ───────────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  id: string;
+  wallet_address: string;
+  ens_name: string | null;
+  tier: "explorer" | "strategist" | "quant";
+  subscription_expires_at: string | null;
+  system_count: number;
+  signal_count: number;
+  created_at: string;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUser[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PlatformStats {
+  total_users: number;
+  users_by_tier: Record<string, number>;
+  total_systems: number;
+  total_signals: number;
+  signals_last_24h: number;
+}
+
+export async function getAdminUsers(
+  token: string,
+  page = 1,
+  pageSize = 50
+): Promise<AdminUsersResponse> {
+  return apiFetch(`/admin/users?page=${page}&page_size=${pageSize}`, { token });
+}
+
+export async function updateUserTier(
+  token: string,
+  userId: string,
+  tier: string,
+  subscriptionExpiresAt?: string
+): Promise<{ ok: boolean; tier: string }> {
+  return apiFetch(`/admin/users/${userId}/tier`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      tier,
+      subscription_expires_at: subscriptionExpiresAt ?? null,
+    }),
+    token,
+  });
+}
+
+export async function getPlatformStats(
+  token: string
+): Promise<PlatformStats> {
+  return apiFetch("/admin/stats", { token });
 }

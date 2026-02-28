@@ -37,19 +37,19 @@ export function SignalCard({ signal }: { signal: Signal }) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {signal.sdca_composite_z != null && (
+        {signal.valuation_score != null && (
           <div>
-            <p className="text-xs text-zinc-500">SDCA Z-Score</p>
+            <p className="text-xs text-zinc-500">Valuation</p>
             <p className="text-xl font-bold text-white">
-              {signal.sdca_composite_z.toFixed(2)}
+              {signal.valuation_score.toFixed(2)}
             </p>
           </div>
         )}
-        {signal.ltpi_trend_ratio != null && (
+        {signal.trend_score != null && (
           <div>
-            <p className="text-xs text-zinc-500">LTPI Trend</p>
+            <p className="text-xs text-zinc-500">Trend</p>
             <p className="text-xl font-bold text-white">
-              {(signal.ltpi_trend_ratio * 100).toFixed(0)}%
+              {(signal.trend_score * 100).toFixed(0)}%
             </p>
           </div>
         )}
