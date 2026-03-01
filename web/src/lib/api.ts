@@ -241,3 +241,128 @@ export async function getPlatformStats(
 ): Promise<PlatformStats> {
   return apiFetch("/admin/stats", { token });
 }
+
+// ─── Analysis (Builder endpoints) ────────────────────────────────────────────
+
+export interface ValidationIssue {
+  rule: string;
+  message: string;
+  severity: "error" | "warning";
+  indicator_name: string | null;
+}
+
+export interface ValidationResult {
+  is_valid: boolean;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+  error_count: number;
+  warning_count: number;
+  summary: string;
+}
+
+export async function validateSystem(
+  token: string,
+  systemType: string,
+  systemData: Record<string, unknown>
+): Promise<ValidationResult> {
+  return apiFetch("/analysis/validate", {
+    method: "POST",
+    body: JSON.stringify({ system_type: systemType, system_data: systemData }),
+    token,
+  });
+}
+
+export interface ZScoreResult {
+  z_score: number;
+  mean: number;
+  std: number;
+  raw_value: number;
+  data_points_used: number;
+  outliers_removed: number;
+  method: string;
+}
+
+export async function computeZScore(
+  token: string,
+  values: number[],
+  currentValue: number,
+  outlierMethod = "iqr",
+  useLogTransform = false
+): Promise<ZScoreResult> {
+  return apiFetch("/analysis/zscore", {
+    method: "POST",
+    body: JSON.stringify({
+      values,
+      current_value: currentValue,
+      outlier_method: outlierMethod,
+      use_log_transform: useLogTransform,
+    }),
+    token,
+  });
+}
+
+export interface CoherencyResult {
+  agreement_ratio: number;
+  constructive_ratio: number;
+  destructive_ratio: number;
+  mixed_ratio: number;
+  per_indicator_alignment: Record<string, number>;
+  avg_pairwise_correlation: number;
+  is_coherent: boolean;
+  summary: string;
+  outlier_indicators: string[];
+}
+
+export async function analyzeCoherency(
+  token: string,
+  signals: Record<string, number[]>
+): Promise<CoherencyResult> {
+  return apiFetch("/analysis/coherency", {
+    method: "POST",
+    body: JSON.stringify({ signals }),
+    token,
+  });
+}
+
+export interface RegimeResult {
+  current_regime: string;
+  confidence: number;
+  regimes: { date: string; regime: string }[];
+  description: string;
+}
+
+export async function detectRegime(
+  token: string,
+  asset: string
+): Promise<RegimeResult> {
+  return apiFetch(`/analysis/regime/${asset}`, { token });
+}
+
+export interface PricePoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number | null;
+}
+
+export interface PriceData {
+  asset: string;
+  frequency: string;
+  data: PricePoint[];
+  count: number;
+}
+
+export async function getPriceData(
+  token: string,
+  asset: string,
+  start?: string,
+  end?: string,
+  frequency = "1D"
+): Promise<PriceData> {
+  const params = new URLSearchParams({ frequency });
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  return apiFetch(`/analysis/prices/${asset}?${params}`, { token });
+}
