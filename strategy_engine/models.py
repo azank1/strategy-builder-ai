@@ -46,6 +46,7 @@ class SignalStrength(str, Enum):
 class AssetClass(str, Enum):
     BTC = "btc"
     ETH = "eth"
+    SOL = "sol"
     GOLD = "gold"
     SPX = "spx"
     ALT = "alt"  # altcoins (premium tier)

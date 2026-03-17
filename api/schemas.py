@@ -102,6 +102,23 @@ class PortfolioResponse(BaseModel):
     computed_at: datetime
 
 
+# ─── RSPS ─────────────────────────────────────────────────────────────────────
+
+# RSPS request/response schemas are co-located in api/routes/rsps.py
+# since they are tightly coupled to the route logic. Re-exported here
+# for discoverability.
+
+from api.routes.rsps import (  # noqa: E402, F401
+    RSPSComputeRequest,
+    RSPSComputeResponse,
+    RSPSValidateRequest,
+    RSPSValidateResponse,
+    ActionResponse,
+    ForwardWatchResponse,
+    DivergenceResponse,
+)
+
+
 # ─── Health ───────────────────────────────────────────────────────────────────
 
 
